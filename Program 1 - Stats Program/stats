@@ -1,0 +1,207 @@
+#!/bin/bash
+
+#This program reads input from a file in the form of rows and columns of
+#whole numbers.  The program will (depending on user input via the command
+#line) find the average and median of the numbers in each row or column.  
+#The program will then print the results in a format that is acceptable for
+#the user to interpret. 
+
+#declare variables
+rows=0
+cols=0
+sum=0
+average=0
+median=0
+choice=0
+
+#Test the number of arguments in the script
+#File name was given
+#"$#" = number of arguments in the script
+#-eq = equals
+if [[ $# -eq 2 ]] 
+then
+	fileName=$2
+#file name was not given
+elif [[ $# -eq 1 ]]
+then
+	#file name comes from the user
+	fileName=/dev/stdin	
+#incorrect number of arguments
+else
+	echo "Usage: stats {-rows|-cols} [file]"
+	exit 1
+fi
+
+#check if file exists
+if [ ! -r "$fileName" ]
+then
+	echo "stats: cannot read $fileName" 1>&2
+	exit 1
+fi
+
+#check if calculating rows or columns
+#rows
+if [[ $1 =~ ^-r  ]]
+then
+	#display calculation header
+	echo "Average Median"
+	#read all rows in the file
+	while read -a rows
+	do
+		#place line elements in array and sort them
+		rowArray=($(printf '%s\n' "${rows[@]}"|sort -n))
+		
+		#calculate the average
+		#reset variables
+		cols=0
+		sum=0
+		average=0
+
+		#loop through line and get sum and number of elements
+		for i in "${rows[@]}"
+		do
+			sum=`expr $sum + $i`
+			cols=`expr $cols + 1`
+		done
+	
+		#calculate averages
+		average=`expr $sum / $cols`
+		#round to nearest integer
+		mod=`expr $sum % $cols`
+		round=`expr $mod \* 2`
+		if [[ $round -ge $cols ]]
+		then
+			average=`expr $average + 1`
+		fi
+
+		#calculate the median
+		#determine if odd or even amount of elements
+		mod=`expr $cols % 2`
+		#even number of elements
+		if [ $mod -eq 0 ]
+		then
+			#gets the higher median score
+			median=`expr \( $cols / 2 \)`
+		#odd number of elements
+		else
+			#will round up to the middle number
+			median=`expr \( $cols / 2 \) + 1`
+			#median element is 1 less
+			median=`expr $median - 1`
+		fi
+		#assign median to median element
+		median=${rowArray[$median]}
+		#print data
+		echo -e "$average \t$median"
+	done <$fileName
+
+#columns
+elif [[ $1 =~ ^-c ]]
+then
+	#get number of columns
+	while read -a cols
+	do
+		numCols=0
+		for i in "${cols[@]}"
+		do
+			numCols=`expr $numCols + 1`
+		done
+		#only need one row
+		break
+	done < "${2:-/dev/stdin}"
+	
+	sum=0
+	average=0
+	colIndex=0
+	column=()
+	numRows=0
+	averageArray=()
+	medianArray=()
+
+	#check if numCols is null
+	if [ -z "$numCols" ]
+	then
+		numCols=0
+	fi
+		
+	#loop through all columns
+	for (( i=0;i<$numCols;i++ ))
+	do
+		#read each row one at a time
+		colIndex=0
+		average=0
+		sum=0
+		median=0
+		while read -a rows
+		do
+			#assign row index to column array
+			column[$colIndex]=${rows[$i]}
+			#add row index to sum
+			sum=`expr $sum + ${rows[$i]}`
+			colIndex=$colIndex+1
+			#increase row count
+			if [[ $i == 0 ]] 
+			then
+				numRows=`expr $numRows + 1`
+			fi
+		done < "${2:-temp}"
+		
+		#calculate average for each column
+		average=`expr $sum / ${#column[@]}`
+		#round to nearest integer
+		mod=`expr $sum % ${#column[@]}`
+		round=`expr $mod \* 2`
+		if [[ $round -ge ${#column[@]} ]]
+		then
+			average=`expr $average + 1`
+		fi
+
+		#add average to average array to print later
+		averageArray[$i]=$average
+
+		#sort column array
+		column=($(printf '%s\n' "${column[@]}"|sort -n))
+		#calculate the median
+		#determine if odd or even amount of elements
+		mod=0
+		mod=`expr $numRows % 2`
+		#even number of elements
+		if [[ $mod -eq 0 ]]
+		then
+			#gets the higher median score
+			median=`expr \( $numRows / 2 \)`
+		#odd number of elements
+		else
+			#will round up to the middle number
+			median=`expr \( $numRows / 2 \) + 1`
+			#median element is 1 less
+			median=`expr $median - 1`
+		fi
+		#assign median to median element
+		median=${column[$median]}
+		#add median to median array to print later
+		medianArray[$i]=$median
+	done
+
+	#print averages
+	echo "Averages:"
+	for avgs in "${averageArray[@]}" 
+	do
+		printf "%s\t" "$avgs"
+	done
+	echo
+	#print medians
+	echo "Medians:"
+	for meds in "${medianArray[@]}"
+	do
+		printf "%s\t" "$meds"
+	done
+	echo
+
+#invalid input
+else
+	echo "Usage: stats {-rows|-cols} [file]"
+	exit 1
+fi
+
+exit 0
